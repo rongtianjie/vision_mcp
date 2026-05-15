@@ -21,14 +21,14 @@ User: "看看这张截图"
 
 ## 安装
 
-### 从源码安装
+### 从源码安装（可编辑模式，推荐）
 
 ```bash
 # 1. 进入项目目录
 cd vision-mcp
 
-# 2. 安装
-pip install .
+# 2. 可编辑模式安装（修改源码无需重新安装）
+pip install -e .
 
 # 3. 验证
 vision-mcp --help
@@ -96,9 +96,26 @@ VISION_API_KEY=sk-your-gateway-key
 VISION_MODEL=gpt-4o
 ```
 
-## 注册到 Claude Code
+## 快速配置
 
-### 用户级（所有项目可用，推荐）
+### 1. 创建配置文件
+
+```bash
+cp .env.example .env
+```
+
+编辑 `.env`，填入你的 API 信息：
+
+```env
+VISION_API_BASE=https://api.siliconflow.cn/v1
+VISION_API_KEY=sk-your-key-here
+VISION_MODEL=Qwen/Qwen3.6-35B-A3B
+VISION_MAX_TOKENS=2048
+```
+
+### 2. 注册到 Claude Code
+
+**直接注册（环境变量写在 MCP 配置中）：**
 
 ```bash
 claude mcp add-json -s user vision '{
@@ -112,50 +129,32 @@ claude mcp add-json -s user vision '{
 }'
 ```
 
-### 项目级（仅当前项目可用）
-
-```bash
-claude mcp add-json -s local vision '{
-  "command": "vision-mcp",
-  "args": [],
-  "env": {
-    "VISION_API_BASE": "https://api.siliconflow.cn/v1",
-    "VISION_API_KEY": "sk-your-key-here",
-    "VISION_MODEL": "Qwen/Qwen3.6-35B-A3B"
-  }
-}'
-```
-
-### 项目共享（`.mcp.json`，团队成员共用）
-
-在项目根目录创建 `.mcp.json`：
-
-```json
-{
-  "mcpServers": {
-    "vision": {
-      "command": "vision-mcp",
-      "args": [],
-      "env": {
-        "VISION_API_BASE": "https://api.siliconflow.cn/v1",
-        "VISION_API_KEY": "sk-your-key-here",
-        "VISION_MODEL": "Qwen/Qwen3.6-35B-A3B"
-      }
-    }
-  }
-}
-```
-
-> 注意：共享配置中的 API Key 对所有项目成员可见。生产环境建议每人注册 user-level 配置，或使用内网 API 网关。
-
-### 验证
+### 3. 验证
 
 ```bash
 claude mcp list
 # 应显示: vision: vision-mcp - ✓ Connected
 ```
 
-然后重启 Claude Code，在新会话中直接发送图片路径即可使用。
+重启 Claude Code 即可使用。
+
+### 更新已有注册
+
+```bash
+# 先删除旧配置
+claude mcp remove vision -s user
+
+# 再重新注册
+claude mcp add-json -s user vision '{ ... 新配置 ... }'
+```
+
+### 其他注册方式
+
+| 方式 | 命令 | 说明 |
+|------|------|------|
+| 用户级 | `-s user` | 所有项目可用（推荐） |
+| 项目级 | `-s local` | 仅当前项目可用 |
+| 项目共享 | `.mcp.json` | 团队成员共用（注意 API Key 会暴露） |
 
 ## 可用工具
 
@@ -191,9 +190,10 @@ User: "读取 @data_table.png，把表格转成 markdown"
 
 ### Q: `claude mcp list` 显示 Failed to connect？
 
-1. 确认 `pip install .` 成功，`vision-mcp` 命令可用
-2. 检查 `VISION_API_BASE` 是否可访问：`curl $VISION_API_BASE/models`
-3. 查看 Python 报错：直接运行 `vision-mcp` 看 stderr 输出
+1. 确认使用 `pip install -e .`（可编辑模式），而非 `pip install .`，否则可能找不到模块
+2. 确认 `vision-mcp --help` 可正常执行
+3. 检查 `VISION_API_BASE` 是否可访问：`curl $VISION_API_BASE/models`
+4. 直接运行 `vision-mcp` 看 stderr 有无报错（如 `ModuleNotFoundError: No module named 'vision_mcp'` 说明需要 `pip install -e .`）
 
 ### Q: 工具返回乱码或空？
 
@@ -204,7 +204,7 @@ User: "读取 @data_table.png，把表格转成 markdown"
 
 ### Q: 如何换模型？
 
-修改 MCP 配置中的 `VISION_MODEL` 环境变量，然后重新注册：
+修改 `.env` 或 MCP 注册配置中的 `VISION_MODEL`，然后重新注册：
 
 ```bash
 claude mcp remove vision -s user
