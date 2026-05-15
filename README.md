@@ -1,0 +1,216 @@
+# Vision MCP Server
+
+为没有多模态能力的 LLM（如 DeepSeek）提供图片理解能力。通过 OpenAI-compatible API 调用外部视觉模型（Qwen-VL、GPT-4o 等），在 Claude Code 中以 MCP 工具的形式呈现。
+
+## 工作原理
+
+```
+User: "看看这张截图"
+  → Claude (DeepSeek, 无视觉)
+    → 调用 describe_image 工具
+      → MCP Server 读取图片 → Base64 编码
+        → 请求视觉模型 API
+          ← 返回文字描述
+    → Claude 基于描述回答用户
+```
+
+## 环境要求
+
+- Python 3.10+
+- 一个 OpenAI-compatible 的视觉模型 API（如 SiliconFlow、vLLM、Ollama 等）
+
+## 安装
+
+### 从源码安装
+
+```bash
+# 1. 进入项目目录
+cd vision-mcp
+
+# 2. 安装
+pip install .
+
+# 3. 验证
+vision-mcp --help
+```
+
+### 从 GitHub 安装（如果有仓库）
+
+```bash
+pip install git+https://github.com/your-org/vision-mcp.git
+```
+
+## 配置视觉模型 API
+
+### 支持的 Provider
+
+任何 OpenAI-compatible 的 `/chat/completions` 接口都可以使用。以下是验证过的 provider：
+
+| Provider | 模型示例 | 说明 |
+|----------|---------|------|
+| [SiliconFlow](https://siliconflow.cn) | `Qwen/Qwen3.6-35B-A3B`、`Qwen/Qwen3-VL-32B-Instruct` | 国内首推，稳定快速 |
+| vLLM 自部署 | 任意 VL 模型 | 内网部署，无数据外泄 |
+| Ollama | `llava`、`minicpm-v` | 本地运行，免费 |
+| OpenAI 兼容代理 | `gpt-4o`、`gpt-4-vision` | 通过 one-api 等网关 |
+
+### 环境变量
+
+| 变量 | 必填 | 默认值 | 说明 |
+|------|------|--------|------|
+| `VISION_API_BASE` | 是 | `http://localhost:8000/v1` | API 基础 URL，无需带 `/chat/completions` |
+| `VISION_API_KEY` | 按需 | `not-needed` | API 密钥，本地部署可留空 |
+| `VISION_MODEL` | 是 | `qwen-vl-plus` | 模型名称 |
+| `VISION_MAX_TOKENS` | 否 | `2000` | 最大输出 token 数 |
+
+### 各 Provider 配置示例
+
+**SiliconFlow：**
+
+```bash
+VISION_API_BASE=https://api.siliconflow.cn/v1
+VISION_API_KEY=sk-your-key-here
+VISION_MODEL=Qwen/Qwen3.6-35B-A3B
+```
+
+**本地 vLLM：**
+
+```bash
+VISION_API_BASE=http://10.0.0.5:8000/v1
+VISION_API_KEY=not-needed
+VISION_MODEL=Qwen3-VL-32B-Instruct
+```
+
+**本地 Ollama：**
+
+```bash
+VISION_API_BASE=http://localhost:11434/v1
+VISION_API_KEY=not-needed
+VISION_MODEL=llava:13b
+```
+
+**One-API 网关（代理 GPT-4o）：**
+
+```bash
+VISION_API_BASE=https://your-gateway.com/v1
+VISION_API_KEY=sk-your-gateway-key
+VISION_MODEL=gpt-4o
+```
+
+## 注册到 Claude Code
+
+### 用户级（所有项目可用，推荐）
+
+```bash
+claude mcp add-json -s user vision '{
+  "command": "vision-mcp",
+  "args": [],
+  "env": {
+    "VISION_API_BASE": "https://api.siliconflow.cn/v1",
+    "VISION_API_KEY": "sk-your-key-here",
+    "VISION_MODEL": "Qwen/Qwen3.6-35B-A3B"
+  }
+}'
+```
+
+### 项目级（仅当前项目可用）
+
+```bash
+claude mcp add-json -s local vision '{
+  "command": "vision-mcp",
+  "args": [],
+  "env": {
+    "VISION_API_BASE": "https://api.siliconflow.cn/v1",
+    "VISION_API_KEY": "sk-your-key-here",
+    "VISION_MODEL": "Qwen/Qwen3.6-35B-A3B"
+  }
+}'
+```
+
+### 项目共享（`.mcp.json`，团队成员共用）
+
+在项目根目录创建 `.mcp.json`：
+
+```json
+{
+  "mcpServers": {
+    "vision": {
+      "command": "vision-mcp",
+      "args": [],
+      "env": {
+        "VISION_API_BASE": "https://api.siliconflow.cn/v1",
+        "VISION_API_KEY": "sk-your-key-here",
+        "VISION_MODEL": "Qwen/Qwen3.6-35B-A3B"
+      }
+    }
+  }
+}
+```
+
+> 注意：共享配置中的 API Key 对所有项目成员可见。生产环境建议每人注册 user-level 配置，或使用内网 API 网关。
+
+### 验证
+
+```bash
+claude mcp list
+# 应显示: vision: vision-mcp - ✓ Connected
+```
+
+然后重启 Claude Code，在新会话中直接发送图片路径即可使用。
+
+## 可用工具
+
+### `describe_image`
+
+| 参数 | 必填 | 说明 |
+|------|------|------|
+| `image_path` | 是 | 图片文件的本地绝对路径 |
+| `prompt` | 否 | 描述侧重点，如 "描述图表中的数据趋势"、"提取所有文字" |
+
+支持的图片格式：PNG、JPG、JPEG、GIF、WebP、BMP
+
+图片大小限制：20MB 以内
+
+### `vision_ping`
+
+诊断工具，返回服务状态信息，用于排查 MCP 通信是否正常。
+
+## 使用示例
+
+```
+# 截了一张报错图
+User: "帮我看看 @error_screenshot.png 里的报错信息是什么"
+
+# 分析架构图
+User: "用 describe_image 看一下 @architecture.png，这个系统设计有什么问题"
+
+# 提取表格数据
+User: "读取 @data_table.png，把表格转成 markdown"
+```
+
+## 常见问题
+
+### Q: `claude mcp list` 显示 Failed to connect？
+
+1. 确认 `pip install .` 成功，`vision-mcp` 命令可用
+2. 检查 `VISION_API_BASE` 是否可访问：`curl $VISION_API_BASE/models`
+3. 查看 Python 报错：直接运行 `vision-mcp` 看 stderr 输出
+
+### Q: 工具返回乱码或空？
+
+可能是视觉模型不支持该图片格式。尝试：
+- 将图片转为 PNG 格式
+- 缩小图片尺寸（大图 base64 编码后可能超出 API 限制）
+- 换一个视觉模型
+
+### Q: 如何换模型？
+
+修改 MCP 配置中的 `VISION_MODEL` 环境变量，然后重新注册：
+
+```bash
+claude mcp remove vision -s user
+claude mcp add-json -s user vision '{ ... 新配置 ... }'
+```
+
+### Q: 图片数据会存在哪里？
+
+图片以 Base64 格式通过 HTTPS 发送到配置的 API 服务器，不会被 MCP Server 本地存储或缓存。如果使用公网 API（如 SiliconFlow），请勿传入敏感图片。
