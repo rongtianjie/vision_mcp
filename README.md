@@ -36,6 +36,8 @@ vision-mcp --help         # 验证安装
 cp .env.example .env
 ```
 
+> **⚠️ 注意**：在当前的实现中，`.env` 仅作为配置备忘录使用，方便你记录和对照参数。真正的环境变量值是在下一步注册 MCP 时通过 `claude mcp add-json` 的 `env` 字段**固化**到 Claude Code 配置文件中的。修改 `.env` 后需要重新执行注册命令才会生效。
+
 | 变量 | 必填 | 默认值 | 说明 |
 |------|------|--------|------|
 | `VISION_API_BASE` | 是 | `http://localhost:8000/v1` | API 地址，不含 `/chat/completions` 后缀 |
@@ -104,10 +106,30 @@ claude mcp list
 
 ### 更新配置
 
+修改 `VISION_MODEL`、`VISION_API_KEY` 等环境变量后，需要重新注册 MCP 才能生效。过程分两步：
+
+**1. 修改 `.env` 文件**，填入新值。
+
+**2. 重新注册 MCP Server**（从当前 `.env` 中取值替换 `{...}` 占位）：
+
 ```bash
-claude mcp remove vision -s user
-claude mcp add-json -s user vision '{ ... }'
+# 移除旧注册
+claude mcp remove -s user vision
+
+# 重新注册
+claude mcp add-json -s user vision '{
+  "command": "vision-mcp",
+  "args": [],
+  "env": {
+    "VISION_API_BASE": "https://api.siliconflow.cn/v1",
+    "VISION_API_KEY": "sk-your-key-here",
+    "VISION_MODEL": "Qwen/Qwen3.6-35B-A3B",
+    "VISION_MAX_TOKENS": "4096"
+  }
+}'
 ```
+
+> MCP 注册时会**固化**当前环境变量值，后续仅修改 `.env` 不会自动生效——必须重新执行 `add-json`。新的配置会在下一个对话或重启 Claude Code 后开始生效。
 
 ## 工具
 
