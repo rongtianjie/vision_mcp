@@ -4,12 +4,19 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vision-mcp"
-version = "1.0.0"
+version = "1.1.0"
 description = "MCP server that bridges LLMs without vision to multimodal models via OpenAI-compatible APIs"
 requires-python = ">=3.10"
 dependencies = [
-    "httpx>=0.24",
-    "mcp>=1.0",
+    "httpx>=0.24,<1.0",
+    "mcp>=1.0,<2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "ruff>=0.1",
 ]
 
 [project.scripts]
@@ -18,3 +25,14 @@ vision-mcp = "vision_mcp:main"
 [tool.setuptools.packages.find]
 include = ["vision_mcp*"]
 where = ["."]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
