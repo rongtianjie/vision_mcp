@@ -1,10 +1,12 @@
 # Vision MCP Server
 
-为缺少多模态能力的 LLM（如 DeepSeek）提供图片理解能力。通过 OpenAI-compatible API 将图片转发至视觉模型，在 Code Agent 中以 MCP 工具形式暴露 `describe_image`。
+为缺少多模态能力的 LLM（如 DeepSeek）提供图片理解能力。通过 OpenAI-compatible API 将图片转发至视觉模型，以 MCP 工具形式暴露 `describe_image`，可接入任意支持 MCP 协议的 AI Agent（Claude Code、Cline、Continue.dev 等）。
 
 ---
 
-## 一、快速上手
+## 一、配置方式
+
+所有后端配置（API 地址、密钥、模型名）通过项目根目录的 `.env` 文件管理，**无需在 MCP 注册时反复传入环境变量**。修改配置后重启 Agent 即可生效。
 
 ### 1. 安装
 
@@ -12,33 +14,24 @@
 uv venv && uv pip install -e .
 ```
 
-### 2. 注册到 Code Agent
+### 2. 配置后端
+
+复制配置模板并填入实际值：
 
 ```bash
-claude mcp add-json -s user vision '{
-  "command": "vision-mcp",
-  "args": [],
-  "env": {
-    "VISION_API_BASE": "https://api.siliconflow.cn/v1",
-    "VISION_API_KEY": "sk-your-key-here",
-    "VISION_MODEL": "Qwen/Qwen3.6-35B-A3B",
-    "VISION_MAX_TOKENS": "2000"
-  }
-}'
+cp .env.example .env
 ```
 
-> `vision-mcp` 命令由 `pyproject.toml` 注册，`uv pip install -e .` 后自动可用。注册后**重启 Code Agent** 生效。
+`.env` 文件内容：
 
-### 3. 验证
-
-```bash
-vision-mcp --help
-claude mcp list           # → vision: vision-mcp - ✓ Connected
+```
+VISION_API_BASE=https://api.siliconflow.cn/v1      # 视觉模型 API 地址
+VISION_API_KEY=sk-your-key-here                      # API 密钥
+VISION_MODEL=Qwen/Qwen3.6-35B-A3B                    # 模型名称
+VISION_MAX_TOKENS=2000                                # 最大输出 token 数（可选）
 ```
 
----
-
-## 二、环境变量
+> `.env` 由 Server 启动时自动加载，修改后重启 Agent 即可生效，**无需重新注册 MCP**。
 
 | 变量 | 必填 | 默认值 | 说明 |
 |------|------|--------|------|
@@ -47,33 +40,58 @@ claude mcp list           # → vision: vision-mcp - ✓ Connected
 | `VISION_MODEL` | 是 | `qwen-vl-plus` | 视觉模型名称 |
 | `VISION_MAX_TOKENS` | 否 | `2000` | 单次响应最大 token 数 |
 
-> 环境变量通过注册命令的 `env` 字段固化到 Agent 配置中。修改后需**重新执行注册命令**。
+### 3. 注册到 AI Agent
 
-### Provider 配置参考
+**方式 A（推荐）— 直接使用 `.mcp.json`**
 
-| Provider | API_BASE | 推荐模型 |
-|----------|----------|---------|
-| SiliconFlow | `https://api.siliconflow.cn/v1` | `Qwen/Qwen3.6-35B-A3B` |
-| 本地 vLLM | `http://10.0.0.5:8000/v1` | `Qwen3-VL-32B-Instruct` |
-| 本地 Ollama | `http://localhost:11434/v1` | `llava:13b` |
-| One-API 网关 | `https://your-gateway.com/v1` | `gpt-4o` |
+项目已内置 `.mcp.json` 文件，支持此格式的 Agent（Cline、Continue.dev 等）会自动识别：
+
+```json
+{
+  "mcpServers": {
+    "vision": {
+      "command": "uv",
+      "args": ["run", "vision-mcp"]
+    }
+  }
+}
+```
+
+**方式 B — Claude Code 手动注册**
+
+```bash
+claude mcp add-json -s user vision '{
+  "command": "uv",
+  "args": ["run", "vision-mcp"]
+}'
+```
+
+> 所有方式均**无需携带 `env` 字段**，配置已由 `.env` 文件管理。
+
+### 4. 验证
+
+```bash
+vision-mcp --help
+```
+
+确认 Agent 中 MCP Server 状态为已连接（Claude Code: `claude mcp list` → `vision: vision-mcp - ✓ Connected`）。
 
 ---
 
-## 三、工作原理
+## 二、工作原理
 
 ```
 User: "看看这张截图"
-  → Code Agent (DeepSeek, 无视觉)
+  → AI Agent (DeepSeek, 无视觉)
     → 调用 describe_image 工具
       → Vision MCP Server: 读取本地图片 → Base64 → POST 视觉模型 API
         ← 返回文字描述
-  → Code Agent 基于描述回答用户
+  → AI Agent 基于描述回答用户
 ```
 
 ---
 
-## 四、工具说明
+## 三、工具说明
 
 ### describe_image — 理解图片内容
 
@@ -97,7 +115,7 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/call",\
 
 ---
 
-## 五、使用示例
+## 四、使用示例
 
 ```
 User: 看看 @error_screenshot.png 里的报错信息
@@ -108,23 +126,18 @@ User: @chart.png 描述数据变化趋势，控制在 200 字以内
 
 ---
 
-## 六、更新配置
+## 五、更新配置
 
-修改环境变量后重新注册：
+修改 `.env` 文件后**重启 AI Agent** 即可生效，无需重新注册 MCP。
 
-```bash
-claude mcp remove vision -s user
-claude mcp add-json -s user vision '{
-  "command": "vision-mcp",
-  "args": [],
-  "env": {
-    "VISION_API_BASE": "...",
-    "VISION_API_KEY": "...",
-    "VISION_MODEL": "...",
-    "VISION_MAX_TOKENS": "4096"
-  }
-}'
-```
+如需更换 Provider 的 API 地址，可参考以下配置：
+
+| Provider | `VISION_API_BASE` | 推荐 `VISION_MODEL` |
+|----------|-------------------|--------------------|
+| SiliconFlow | `https://api.siliconflow.cn/v1` | `Qwen/Qwen3.6-35B-A3B` |
+| 本地 vLLM | `http://10.0.0.5:8000/v1` | `Qwen3-VL-32B-Instruct` |
+| 本地 Ollama | `http://localhost:11434/v1` | `llava:13b` |
+| One-API 网关 | `https://your-gateway.com/v1` | `gpt-4o` |
 
 ---
 

@@ -18,6 +18,7 @@ import traceback
 from pathlib import Path
 
 import httpx
+from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 
 # ── Logging ────────────────────────────────────────────────────
@@ -27,6 +28,14 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 logger = logging.getLogger("vision-mcp")
+
+# ── Load .env from project root (before config) ───────────────
+_dotenv_path = Path(__file__).resolve().parent.parent / ".env"
+if _dotenv_path.exists():
+    load_dotenv(_dotenv_path, override=False)
+    logger.info("Loaded env from %s", _dotenv_path)
+else:
+    logger.debug("No .env found at %s", _dotenv_path)
 
 # ── Configuration ──────────────────────────────────────────────
 API_BASE = os.environ.get("VISION_API_BASE", "http://localhost:8000/v1")
