@@ -4,12 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vision-mcp"
-version = "1.1.0"
+version = "1.2.0"
 description = "MCP server that bridges LLMs without vision to multimodal models via OpenAI-compatible APIs"
 requires-python = ">=3.10"
 dependencies = [
     "httpx>=0.24,<1.0",
     "mcp>=1.0,<2.0",
+    "pillow>=10.0",
     "python-dotenv>=1.0",
 ]
 
